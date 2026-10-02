@@ -19,6 +19,8 @@ npm run sim -- tornado
 npm run sim -- asteroid
 ```
 
+Every push to `main` builds and deploys to GitHub Pages through `.github/workflows/deploy.yml`.
+
 Controls: drag anywhere for a floating joystick, or WASD / arrow keys. In asteroid mode, double-tap anywhere (or press Space) to strike, so the whole game plays one-thumbed.
 
 Add `?ufo`, `?tornado`, or `?asteroid` to the URL to skip the picker. Add `?debug` to get `game.give(mass)` and `game.goto(x, z)` in the browser console.
