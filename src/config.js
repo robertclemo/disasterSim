@@ -52,6 +52,17 @@ export const TORNADO = {
   worldRadius: 205,
 };
 
+export const ASTEROID = {
+  blastRadius: 6.5,    // impact radius at scale 1
+  cooldown: 0.8,      // seconds between strikes
+  flightTime: 0.7,    // seconds from launch to impact
+  flingSpeed: 10,     // outward launch speed at the edge-to-centre midpoint
+  gravity: 24,
+  speed: 16,          // reticle speed at scale 1
+  speedGrowth: 0.55,
+  worldRadius: 205,
+};
+
 export const WORLD = {
   seed: 1977,
   blocks: 6,          // town is blocks x blocks

@@ -60,9 +60,28 @@ export function stepObjects({ objects, ufoPos, lift, scale, dt, time, absorbedFo
   return heaviestNeed;
 }
 
-// ---------- Tornado ----------
-import { TORNADO } from './config.js';
+// ---------- Shared: things in flight that land as wreckage ----------
+import { TORNADO, ASTEROID } from './config.js';
 import { wreckLook } from './models.js';
+
+export function stepFlung(o, s, dt, gravity, rng, onLand) {
+  const p = o.group.position;
+  o.vy -= gravity * Math.sqrt(s) * dt;
+  p.x += o.vx * dt; p.y += o.vy * dt; p.z += o.vz * dt;
+  o.group.rotation.x += o.spin * 2.5 * dt;
+  o.group.rotation.z += o.spin * 1.5 * dt;
+  if (p.y <= 0 && o.vy < 0) {
+    o.state = 'wreck';
+    wreckLook(o.group);
+    const upsideDown = o.mass < 200 && rng() < 0.4;
+    o.group.rotation.set(upsideDown ? Math.PI : (rng() - 0.5) * 0.5, o.group.rotation.y, (rng() - 0.5) * 0.5);
+    o.group.scale.set(1, 0.8, 1);
+    p.y = upsideDown ? o.height * 0.8 : 0;
+    onLand?.(o);
+  }
+}
+
+// ---------- Tornado ----------
 
 // Funnel radius at height h (world units) for a tornado at scale s.
 export function funnelRadius(h, s) {
@@ -138,20 +157,53 @@ export function stepTornadoObjects({ objects, center, lean, lift, scale: s, dt, 
         onFling(o);
       }
     } else if (st === 'flung') {
-      o.vy -= TORNADO.gravity * Math.sqrt(s) * dt;
-      p.x += o.vx * dt; p.y += o.vy * dt; p.z += o.vz * dt;
-      o.group.rotation.x += o.spin * 2.5 * dt;
-      o.group.rotation.z += o.spin * 1.5 * dt;
-      if (p.y <= 0 && o.vy < 0) {
-        o.state = 'wreck';
-        wreckLook(o.group);
-        const upsideDown = o.mass < 200 && rng() < 0.4;
-        o.group.rotation.set(upsideDown ? Math.PI : (rng() - 0.5) * 0.5, o.group.rotation.y, (rng() - 0.5) * 0.5);
-        o.group.scale.set(1, 0.8, 1);
-        p.y = upsideDown ? o.height * 0.8 : 0;
-        onLand?.(o);
-      }
+      stepFlung(o, s, dt, TORNADO.gravity, rng, onLand);
     }
   }
   return heaviestNeed;
+}
+
+// ---------- Asteroid ----------
+// An impact at (cx, cz) throws everything liftable in the radius outward, harder near the centre.
+// Wreckage already on the ground gets kicked again for fun but doesn't count twice.
+// Returns the smallest extra mass needed for anything too heavy that got hit (0 if none).
+export function blast({ objects, cx, cz, radius, lift, scale: s, rng, absorbedFor, absorbed, onFling }) {
+  let heaviestNeed = 0;
+  const k = Math.pow(s, 0.4);
+  for (const o of objects) {
+    if (o.state !== 'ground' && o.state !== 'wreck') continue;
+    const p = o.group.position;
+    let dx = p.x - cx, dz = p.z - cz;
+    let d = Math.hypot(dx, dz);
+    if (d > radius + o.radius * 0.3) continue;
+    if (o.state === 'ground' && o.mass > lift) {
+      const need = Math.ceil(absorbedFor(o.mass) - absorbed);
+      heaviestNeed = heaviestNeed ? Math.min(heaviestNeed, need) : need;
+      o.shake = 1;
+      continue;
+    }
+    if (d < 0.01) { const a = rng() * Math.PI * 2; dx = Math.cos(a); dz = Math.sin(a); d = 1; }
+    const f = Math.max(0, 1 - d / radius);
+    const out = ASTEROID.flingSpeed * k * (0.35 + f) * (0.8 + rng() * 0.4);
+    o.vx = (dx / d) * out;
+    o.vz = (dz / d) * out;
+    o.vy = (5 + 11 * f) * Math.sqrt(s) * (0.7 + rng() * 0.6);
+    o.spin = (rng() - 0.5) * 6;
+    if (o.state === 'wreck') { p.y = Math.max(p.y, 0.01); o.state = 'flung'; continue; }
+    o.mover = null;
+    o.state = 'flung';
+    onFling(o);
+  }
+  return heaviestNeed;
+}
+
+// Per-frame: things in flight, plus the shudder on anything too heavy that got hit.
+export function stepAsteroidObjects({ objects, scale: s, dt, time, rng, onLand }) {
+  for (const o of objects) {
+    if (o.state === 'flung') stepFlung(o, s, dt, ASTEROID.gravity, rng, onLand);
+    else if (o.shake > 0 && o.state === 'ground') {
+      o.shake = Math.max(0, o.shake - dt * 1.5);
+      o.group.rotation.z = Math.sin(time * 40) * 0.07 * o.shake;
+    }
+  }
 }

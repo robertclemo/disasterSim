@@ -1,10 +1,11 @@
 import * as THREE from 'three';
-import { KINDS, UFO, TORNADO, liftFor, scaleFor } from './config.js';
+import { KINDS, UFO, TORNADO, ASTEROID, liftFor, scaleFor } from './config.js';
 import { buildWorld, updateMovers, mulberry32 } from './world.js';
 import { buildUfo } from './ufo.js';
 import { buildTornado } from './tornado.js';
+import { buildAsteroid } from './asteroid.js';
 import { createInput } from './input.js';
-import { stepObjects, stepTornadoObjects } from './game.js';
+import { stepObjects, stepTornadoObjects, blast, stepAsteroidObjects } from './game.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -116,6 +117,49 @@ function tornadoMode() {
   };
 }
 
+function asteroidMode() {
+  const dusk = 0xe8b48f;
+  scene.background.set(dusk);
+  scene.fog.color.set(dusk);
+  hemi.color.set(0xffe2c9);
+  sun.color.set(0xffc58f);
+  const ast = buildAsteroid(scene);
+  let cooldown = 0;
+  let heavyFromBlast = 0, heavyTimer = 0;
+  const btn = $('strike');
+  btn.hidden = false;
+  const fire = () => {
+    if (cooldown > 0 || state.ended) return;
+    cooldown = ASTEROID.cooldown;
+    state.moved = true;
+    ast.launch(state.x, state.z, state.scale, ASTEROID.blastRadius * state.scale);
+  };
+  btn.addEventListener('pointerdown', (e) => { e.preventDefault(); fire(); });
+  addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(); fire(); } });
+  return {
+    cfg: ASTEROID,
+    words: { stat: 'IMPACT', banner: 'NOW BLASTING', heavy: 'blast', progress: 'Canyon cratered', end: 'EXTINCTION EVENT',
+      endText: (m) => `You blasted ${m} tons into the sky. Nothing is left standing.` },
+    popHeight: (s) => 6 * s,
+    update(dt, time, s) {
+      cooldown = Math.max(0, cooldown - dt);
+      btn.style.setProperty('--cd', `${(cooldown / ASTEROID.cooldown) * 360}deg`);
+      btn.classList.toggle('ready', cooldown <= 0);
+      const shake = ast.update(dt, time, s, state.x, state.z, cooldown, (x, z, radius, rs) => {
+        const need = blast({ objects, cx: x, cz: z, radius, lift: state.lift, scale: rs, rng,
+          absorbedFor, absorbed: state.absorbed, onFling: absorb });
+        if (need) { heavyFromBlast = need; heavyTimer = 1.4; }
+      });
+      if (shake) state.shake = Math.max(state.shake || 0, 0.5 * Math.sqrt(s));
+    },
+    step(dt, time, s) {
+      stepAsteroidObjects({ objects, scale: s, dt, time, rng });
+      heavyTimer -= dt;
+      return heavyTimer > 0 ? heavyFromBlast : 0;
+    },
+  };
+}
+
 let mode = null;
 
 // ---------- HUD helpers ----------
@@ -188,6 +232,12 @@ function placeCamera(dt, s) {
   tmpV.set(state.x, dist * 0.85, state.z + dist * 0.62);
   camera.position.lerp(tmpV, dt === null ? 1 : 1 - Math.exp(-dt * 4));
   camera.lookAt(state.x, 7 * s * 0.25 * tall, state.z - dist * 0.08);
+  if (state.shake > 0 && dt !== null) {
+    const a = state.shake;
+    camera.position.x += (Math.random() - 0.5) * a;
+    camera.position.y += (Math.random() - 0.5) * a;
+    state.shake = Math.max(0, state.shake - dt * 2.5 * Math.max(1, a));
+  }
   scene.fog.near = dist * 2.2;
   scene.fog.far = dist * 6 + 140;
   const sb = dist * 1.3;
@@ -240,12 +290,13 @@ function tick() {
 
 // ---------- start screen ----------
 function start(which) {
-  mode = which === 'tornado' ? tornadoMode() : ufoMode();
+  mode = which === 'tornado' ? tornadoMode() : which === 'asteroid' ? asteroidMode() : ufoMode();
   $('statLabel').textContent = mode.words.stat;
   $('bannerLead').textContent = mode.words.banner;
   $('pick').classList.add('gone');
   $('hud').hidden = false;
   $('hint').hidden = false;
+  if (which === 'asteroid') $('hint').textContent = 'Drag to aim · tap STRIKE or press Space';
   clock.getDelta();
   requestAnimationFrame(tick);
 }
@@ -258,6 +309,7 @@ renderer.render(scene, camera);
 const params = new URLSearchParams(location.search);
 if (params.has('ufo')) start('ufo');
 if (params.has('tornado')) start('tornado');
+if (params.has('asteroid')) start('asteroid');
 if (params.has('debug')) {
   window.game = {
     state, objects,
