@@ -1,9 +1,14 @@
 // Headless balance check: a bot flies to the nearest thing it can lift and eats the world.
-// Run with: npm run sim
+// Run with: npm run sim            (UFO)
+//           npm run sim -- tornado
 import * as THREE from 'three';
-import { KINDS, UFO, liftFor, scaleFor } from '../src/config.js';
+import { KINDS, UFO, TORNADO, liftFor, scaleFor } from '../src/config.js';
 import { buildWorld, updateMovers, mulberry32 } from '../src/world.js';
-import { stepObjects } from '../src/game.js';
+import { stepObjects, stepTornadoObjects } from '../src/game.js';
+
+const MODE = process.argv[2] === 'tornado' ? 'tornado' : 'ufo';
+const CFG = MODE === 'tornado' ? TORNADO : UFO;
+console.log(`mode: ${MODE}`);
 
 const scene = new THREE.Scene();
 const { objects } = buildWorld(scene);
@@ -39,18 +44,25 @@ while (left > 0 && t < LIMIT) {
     const d = Math.hypot(o.group.position.x - st.x, o.group.position.z - st.z);
     if (d < bd) { bd = d; best = o; }
   }
-  const speed = UFO.speed * Math.pow(st.scale, UFO.speedGrowth);
+  const speed = CFG.speed * Math.pow(st.scale, CFG.speedGrowth);
   if (best && bd > 0.5) {
     const step = Math.min(bd, speed * dt);
     st.x += ((best.group.position.x - st.x) / bd) * step;
     st.z += ((best.group.position.z - st.z) / bd) * step;
   }
   const r = Math.hypot(st.x, st.z);
-  if (r > UFO.worldRadius) { st.x *= UFO.worldRadius / r; st.z *= UFO.worldRadius / r; }
+  if (r > CFG.worldRadius) { st.x *= CFG.worldRadius / r; st.z *= CFG.worldRadius / r; }
   ufoPos.set(st.x, UFO.hoverHeight * st.scale, st.z);
   updateMovers(objects, dt, rng);
-  stepObjects({ objects, ufoPos, lift: st.lift, scale: st.scale, dt, time: t, absorbedFor, absorbed: st.absorbed, onAbsorb });
-  if (!best && objects.every((o) => o.state === 'gone' || o.state === 'ground') && left > 0) {
+  if (MODE === 'tornado') {
+    ufoPos.y = 0;
+    stepTornadoObjects({ objects, center: ufoPos, lean: { x: 0, z: 0 }, lift: st.lift, scale: st.scale, dt, time: t, rng,
+      absorbedFor, absorbed: st.absorbed, onFling: onAbsorb });
+  } else {
+    stepObjects({ objects, ufoPos, lift: st.lift, scale: st.scale, dt, time: t, absorbedFor, absorbed: st.absorbed, onAbsorb });
+  }
+  const settled = (o) => o.state === 'gone' || o.state === 'ground' || o.state === 'wreck';
+  if (!best && objects.every(settled) && left > 0) {
     const stuck = objects.filter((o) => o.state === 'ground');
     console.log(`STUCK at ${t.toFixed(0)}s: lift ${st.lift.toFixed(0)}, lightest left ${Math.min(...stuck.map((o) => o.mass))}`);
     break;

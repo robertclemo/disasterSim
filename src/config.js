@@ -38,6 +38,20 @@ export const UFO = {
   worldRadius: 205,   // how far the UFO can roam
 };
 
+export const TORNADO = {
+  height: 18,         // funnel height at scale 1
+  baseRadius: 1.1,    // funnel radius at the ground
+  topRadius: 7.5,     // funnel radius at the top
+  catchRadius: 3.6,   // ground radius that pulls things in at scale 1
+  speed: 13,
+  speedGrowth: 0.55,
+  riseSpeed: 7,       // how fast caught things climb the funnel
+  spin: 4.2,          // orbit speed (radians/sec) near the ground
+  flingSpeed: 8,      // outward launch speed at scale 1
+  gravity: 24,        // lower = floatier arcs
+  worldRadius: 205,
+};
+
 export const WORLD = {
   seed: 1977,
   blocks: 6,          // town is blocks x blocks

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>UFO Sandbox</title>
+  <title>Disaster Sandbox</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap" rel="stylesheet" />
   <style>
@@ -58,27 +58,45 @@
     #end.show { display: flex; }
     #end .t { font-size: clamp(40px, 12vw, 72px); color: var(--gold); }
     #end p { font-size: 20px; margin: 0; }
+    [hidden] { display: none !important; }
+    #pick { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 18px; padding: 24px; background: rgba(20, 16, 40, .45); transition: opacity .35s; }
+    #pick.gone { opacity: 0; pointer-events: none; }
+    #pick .t { font-size: clamp(34px, 10vw, 64px); color: var(--gold); text-align: center; line-height: 1; }
+    .modes { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
+    .modes button { display: flex; flex-direction: column; gap: 2px; min-width: 180px; padding: 16px 22px; }
+    .modes .m { font-size: 30px; }
+    .modes .d { font-family: system-ui, sans-serif; font-size: 14px; font-weight: 600; }
+    .modes button.storm { background: #c9b79c; }
+    button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
     button { font-family: inherit; font-size: 22px; padding: 12px 28px; border-radius: 14px; border: 3px solid var(--ink);
       background: var(--cyan); color: var(--ink); cursor: pointer; margin-top: 12px; box-shadow: 0 4px 0 var(--ink); }
   </style>
 </head>
 <body>
-  <div id="hud">
+  <div id="hud" hidden>
     <div class="row">
       <div class="stat stroke"><span class="k">MASS</span><span class="v" id="mass">0</span></div>
-      <div class="stat right stroke"><span class="k">LIFT</span><span class="v" id="lift">3</span></div>
+      <div class="stat right stroke"><span class="k" id="statLabel">LIFT</span><span class="v" id="lift">3</span></div>
     </div>
     <div id="next">
       <div class="label stroke" id="nextLabel">Next: Cows</div>
       <div class="bar"><div class="fill" id="nextFill"></div></div>
     </div>
   </div>
-  <div id="banner" class="stroke"><div class="a">NOW LIFTING</div><div class="b" id="bannerText">COWS</div></div>
+  <div id="banner" class="stroke"><div class="a" id="bannerLead">NOW LIFTING</div><div class="b" id="bannerText">COWS</div></div>
   <div id="heavy" class="stroke"><div class="a">TOO HEAVY</div><div class="b" id="heavyText">keep eating</div></div>
-  <div id="hint" class="stroke">Drag anywhere to fly · WASD on keyboard</div>
+  <div id="hint" class="stroke" hidden>Drag anywhere to fly · WASD on keyboard</div>
   <div id="stick"><div id="knob"></div></div>
+  <div id="pick">
+    <div class="t stroke">PICK YOUR DISASTER</div>
+    <div class="modes">
+      <button data-mode="ufo"><span class="m">UFO</span><span class="d">Beam it all up</span></button>
+      <button data-mode="tornado" class="storm"><span class="m">TORNADO</span><span class="d">Fling it all around</span></button>
+    </div>
+  </div>
   <div id="end" class="stroke">
-    <div class="t">NOTHING LEFT</div>
+    <div class="t" id="endTitle">NOTHING LEFT</div>
     <p id="endText">You ate the whole canyon.</p>
     <button id="again">Play again</button>
   </div>

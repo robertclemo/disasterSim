@@ -210,3 +210,18 @@ export function rock(rng) {
   part(g, new THREE.DodecahedronGeometry(r * 0.6, 0), c, r * 0.3, h + r * 0.1, 0);
   return { group: g, height: h + r * 0.5, radius: r };
 }
+
+// Swap an object's materials for scorched, darker versions once it has been flung.
+const wreckCache = new Map();
+export function wreckLook(group) {
+  group.traverse((m) => {
+    if (!m.isMesh) return;
+    let w = wreckCache.get(m.material);
+    if (!w) {
+      w = m.material.clone();
+      w.color = m.material.color.clone().multiplyScalar(0.45).lerp(new THREE.Color(0x4a3b2e), 0.35);
+      wreckCache.set(m.material, w);
+    }
+    m.material = w;
+  });
+}

@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { KINDS, UFO, liftFor, scaleFor } from './config.js';
+import { KINDS, UFO, TORNADO, liftFor, scaleFor } from './config.js';
 import { buildWorld, updateMovers, mulberry32 } from './world.js';
 import { buildUfo } from './ufo.js';
+import { buildTornado } from './tornado.js';
 import { createInput } from './input.js';
-import { stepObjects } from './game.js';
+import { stepObjects, stepTornadoObjects } from './game.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -15,10 +16,9 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.prepend(renderer.domElement);
 
-const SKY = 0x9fd8ef;
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(SKY);
-scene.fog = new THREE.Fog(SKY, 120, 320);
+scene.background = new THREE.Color(0x9fd8ef);
+scene.fog = new THREE.Fog(0x9fd8ef, 120, 320);
 
 const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 1500);
 addEventListener('resize', () => {
@@ -27,16 +27,15 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 
-scene.add(new THREE.HemisphereLight(0xdff4ff, 0x8a6b4a, 1.25));
+const hemi = new THREE.HemisphereLight(0xdff4ff, 0x8a6b4a, 1.25);
 const sun = new THREE.DirectionalLight(0xfff1d6, 1.6);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.bias = -0.0005;
-scene.add(sun, sun.target);
+scene.add(hemi, sun, sun.target);
 
-// ---------- world + player ----------
+// ---------- world ----------
 const { objects } = buildWorld(scene);
-const { ufo, beam, ring, lights, edge } = buildUfo(scene);
 const readInput = createInput($('stick'), $('knob'));
 const rng = mulberry32(42);
 
@@ -51,17 +50,83 @@ const state = {
   remaining: objects.length, ended: false, moved: false,
 };
 
+// ---------- players ----------
+// Each mode supplies: cfg, popHeight(s), update(dt, time, s, speed), step(dt, time, s)
+
+function ufoMode() {
+  const { ufo, beam, ring, lights, edge } = buildUfo(scene);
+  return {
+    cfg: UFO,
+    words: { stat: 'LIFT', banner: 'NOW LIFTING', heavy: 'eat', progress: 'Canyon eaten', end: 'NOTHING LEFT',
+      endText: (m) => `Your saucer weighs ${m}. The canyon is empty.` },
+    popHeight: () => ufo.position.y,
+    update(dt, time, s, speed) {
+      const hover = UFO.hoverHeight * s;
+      const beamR = UFO.beamRadius * s;
+      ufo.position.set(state.x, hover + Math.sin(time * 2.2) * 0.25 * s, state.z);
+      ufo.scale.setScalar(s);
+      ufo.rotation.set(state.vz / speed * 0.22, ufo.rotation.y + dt * 1.5, -state.vx / speed * 0.22, 'YXZ');
+      lights.forEach((l, i) => { l.visible = Math.floor(time * 8 + i) % 3 !== 0; });
+      beam.position.set(state.x, ufo.position.y - 0.4 * s, state.z);
+      beam.scale.set(beamR, ufo.position.y - 0.4 * s, beamR);
+      beam.material.opacity = 0.18 + Math.sin(time * 6) * 0.04;
+      ring.position.set(state.x, 0.06, state.z);
+      ring.scale.setScalar(beamR);
+      edge.material.opacity = 0.6 + Math.sin(time * 5) * 0.25;
+    },
+    step(dt, time, s) {
+      return stepObjects({
+        objects, ufoPos: ufo.position, lift: state.lift, scale: s, dt, time,
+        absorbedFor, absorbed: state.absorbed, onAbsorb: absorb,
+        onRemove: (o) => scene.remove(o.group),
+      });
+    },
+  };
+}
+
+function tornadoMode() {
+  const storm = 0x8fa3ad;
+  scene.background.set(storm);
+  scene.fog.color.set(storm);
+  hemi.color.set(0xc9d6dc);
+  sun.intensity = 1.1;
+  const tw = buildTornado(scene);
+  const center = new THREE.Vector3();
+  const lean = { x: 0, z: 0 };
+  return {
+    cfg: TORNADO,
+    words: { stat: 'POWER', banner: 'NOW FLINGING', heavy: 'fling', progress: 'Canyon wrecked', end: 'TOTAL WRECK',
+      endText: (m) => `Your tornado flung ${m} tons. Nothing is standing.` },
+    popHeight: (s) => TORNADO.height * s * 0.8,
+    update(dt, time, s) {
+      center.set(state.x, 0, state.z);
+      // The top trails behind the direction of travel
+      const k = 1 - Math.exp(-dt * 2);
+      lean.x += (state.vx * 0.35 - lean.x) * k;
+      lean.z += (state.vz * 0.35 - lean.z) * k;
+      tw.root.position.copy(center);
+      tw.update(dt, time, s, lean);
+    },
+    step(dt, time, s) {
+      return stepTornadoObjects({
+        objects, center, lean, lift: state.lift, scale: s, dt, time, rng,
+        absorbedFor, absorbed: state.absorbed, onFling: absorb,
+      });
+    },
+  };
+}
+
+let mode = null;
+
 // ---------- HUD helpers ----------
 function fmt(n) { return Math.floor(n).toLocaleString(); }
-
-function nextKind() { return kindsByMass.find(([, k]) => k.mass > state.lift); }
 
 function updateHud() {
   $('mass').textContent = fmt(state.absorbed);
   $('lift').textContent = fmt(state.lift);
-  const nk = nextKind();
+  const nk = kindsByMass.find(([, k]) => k.mass > state.lift);
   if (!nk) {
-    $('nextLabel').textContent = `Canyon eaten: ${Math.floor((state.absorbed / totalMass) * 100)}%`;
+    $('nextLabel').textContent = `${mode.words.progress}: ${Math.floor((state.absorbed / totalMass) * 100)}%`;
     $('nextFill').style.width = `${(state.absorbed / totalMass) * 100}%`;
     return;
   }
@@ -81,7 +146,7 @@ function showBanner(label) {
 
 const tmpV = new THREE.Vector3();
 function popAt(amount) {
-  tmpV.set(state.x, ufo.position.y, state.z).project(camera);
+  tmpV.set(state.x, mode.popHeight(state.scale), state.z).project(camera);
   const el = document.createElement('div');
   el.className = 'pop stroke';
   el.textContent = `+${fmt(amount)}`;
@@ -100,12 +165,14 @@ function absorb(o) {
   for (const [, k] of kindsByMass) {
     if (k.mass > before && k.mass <= state.lift) showBanner(k.label);
   }
-  if (state.remaining === 0) endGame();
+  // Give the last flung things time to land before the end card
+  if (state.remaining === 0) setTimeout(endGame, 2500);
 }
 
 function endGame() {
   state.ended = true;
-  $('endText').textContent = `Your saucer weighs ${fmt(state.absorbed)}. The canyon is empty.`;
+  $('endTitle').textContent = mode.words.end;
+  $('endText').textContent = mode.words.endText(fmt(state.absorbed));
   $('end').classList.add('show');
 }
 $('again').addEventListener('click', () => location.reload());
@@ -114,57 +181,51 @@ $('again').addEventListener('click', () => location.reload());
 const clock = new THREE.Clock();
 let time = 0;
 
+function placeCamera(dt, s) {
+  const portrait = Math.max(1, 1 / camera.aspect) ** 0.55;
+  const tall = mode === null || mode.cfg === UFO ? 1 : 1.15;
+  const dist = 30 * (0.7 + 0.3 * s) * portrait * tall;
+  tmpV.set(state.x, dist * 0.85, state.z + dist * 0.62);
+  camera.position.lerp(tmpV, dt === null ? 1 : 1 - Math.exp(-dt * 4));
+  camera.lookAt(state.x, 7 * s * 0.25 * tall, state.z - dist * 0.08);
+  scene.fog.near = dist * 2.2;
+  scene.fog.far = dist * 6 + 140;
+  const sb = dist * 1.3;
+  sun.position.set(state.x + 40 * s, 70 * s + 40, state.z + 25 * s);
+  sun.target.position.set(state.x, 0, state.z - dist * 0.2);
+  Object.assign(sun.shadow.camera, { left: -sb, right: sb, top: sb, bottom: -sb, near: 1, far: 260 * s + 200 });
+  sun.shadow.camera.updateProjectionMatrix();
+}
+
 function tick() {
   const dt = Math.min(clock.getDelta(), 1 / 20);
   time += dt;
 
-  // Size eases toward what our lift says it should be
-  const targetScale = scaleFor(state.lift);
-  state.scale += (targetScale - state.scale) * (1 - Math.exp(-dt * 2.5));
+  state.scale += (scaleFor(state.lift) - state.scale) * (1 - Math.exp(-dt * 2.5));
   const s = state.scale;
-  const hover = UFO.hoverHeight * s;
-  const beamR = UFO.beamRadius * s;
 
   // Movement: screen up is world -z
   const inp = readInput();
   if (inp.x || inp.y) state.moved = true;
-  const speed = UFO.speed * Math.pow(s, UFO.speedGrowth);
+  const speed = mode.cfg.speed * Math.pow(s, mode.cfg.speedGrowth);
   const k = 1 - Math.exp(-dt * 6);
   state.vx += (inp.x * speed - state.vx) * k;
   state.vz += (inp.y * speed - state.vz) * k;
   state.x += state.vx * dt;
   state.z += state.vz * dt;
   const r = Math.hypot(state.x, state.z);
-  if (r > UFO.worldRadius) { state.x *= UFO.worldRadius / r; state.z *= UFO.worldRadius / r; }
+  if (r > mode.cfg.worldRadius) { state.x *= mode.cfg.worldRadius / r; state.z *= mode.cfg.worldRadius / r; }
 
-  // Saucer pose
-  ufo.position.set(state.x, hover + Math.sin(time * 2.2) * 0.25 * s, state.z);
-  ufo.scale.setScalar(s);
-  ufo.rotation.set(state.vz / speed * 0.22, ufo.rotation.y + dt * 1.5, -state.vx / speed * 0.22, 'YXZ');
-  lights.forEach((l, i) => { l.visible = Math.floor(time * 8 + i) % 3 !== 0; });
-
-  beam.position.set(state.x, ufo.position.y - 0.4 * s, state.z);
-  beam.scale.set(beamR, ufo.position.y - 0.4 * s, beamR);
-  beam.material.opacity = 0.18 + Math.sin(time * 6) * 0.04;
-  ring.position.set(state.x, 0.06, state.z);
-  ring.scale.setScalar(beamR);
-  edge.material.opacity = 0.6 + Math.sin(time * 5) * 0.25;
-
-  // Objects
+  mode.update(dt, time, s, speed);
   updateMovers(objects, dt, rng);
-  const heaviestNeed = stepObjects({
-    objects, ufoPos: ufo.position, lift: state.lift, scale: s, dt, time,
-    absorbedFor, absorbed: state.absorbed, onAbsorb: absorb,
-    onRemove: (o) => scene.remove(o.group),
-  });
+  const heaviestNeed = mode.step(dt, time, s);
 
-  // HUD timers
   state.popTimer -= dt;
   if (state.pendingPop > 0 && state.popTimer <= 0) { popAt(state.pendingPop); state.pendingPop = 0; state.popTimer = 0.18; }
   if (state.bannerTimer > 0 && (state.bannerTimer -= dt) <= 0) $('banner').classList.remove('show');
   if (heaviestNeed > 0) {
     state.heavyTimer = 0.4;
-    $('heavyText').textContent = `eat ${fmt(heaviestNeed)} more mass`;
+    $('heavyText').textContent = `${mode.words.heavy} ${fmt(heaviestNeed)} more mass`;
     $('heavy').classList.add('show');
   } else if (state.heavyTimer > 0 && (state.heavyTimer -= dt) <= 0) {
     $('heavy').classList.remove('show');
@@ -172,31 +233,32 @@ function tick() {
   if (state.moved) $('hint').style.opacity = '0';
   updateHud();
 
-  // Camera pulls back as the saucer grows; a bit further on portrait screens
-  const portrait = Math.max(1, 1 / camera.aspect) ** 0.55;
-  const dist = 30 * (0.7 + 0.3 * s) * portrait;
-  const camTarget = tmpV.set(state.x, 0, state.z + dist * 0.62);
-  camera.position.lerp(camTarget.setY(dist * 0.85), 1 - Math.exp(-dt * 4));
-  camera.lookAt(state.x, hover * 0.25, state.z - dist * 0.08);
-  scene.fog.near = dist * 2.2;
-  scene.fog.far = dist * 6 + 140;
-
-  // Shadow box follows the player and grows with the camera
-  const sb = dist * 1.3;
-  sun.position.set(state.x + 40 * s, 70 * s + 40, state.z + 25 * s);
-  sun.target.position.set(state.x, 0, state.z - dist * 0.2);
-  Object.assign(sun.shadow.camera, { left: -sb, right: sb, top: sb, bottom: -sb, near: 1, far: 260 * s + 200 });
-  sun.shadow.camera.updateProjectionMatrix();
-
+  placeCamera(dt, s);
   renderer.render(scene, camera);
   if (!state.ended) requestAnimationFrame(tick);
 }
 
-camera.position.set(state.x, 26, state.z + 19);
-requestAnimationFrame(tick);
+// ---------- start screen ----------
+function start(which) {
+  mode = which === 'tornado' ? tornadoMode() : ufoMode();
+  $('statLabel').textContent = mode.words.stat;
+  $('bannerLead').textContent = mode.words.banner;
+  $('pick').classList.add('gone');
+  $('hud').hidden = false;
+  $('hint').hidden = false;
+  clock.getDelta();
+  requestAnimationFrame(tick);
+}
+document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => start(b.dataset.mode)));
 
-// Test hook: ?debug exposes state so you can teleport or grant mass from the console
-if (new URLSearchParams(location.search).has('debug')) {
+placeCamera(null, 1);
+renderer.render(scene, camera);
+
+// ?ufo or ?tornado skips the picker. ?debug exposes helpers in the console.
+const params = new URLSearchParams(location.search);
+if (params.has('ufo')) start('ufo');
+if (params.has('tornado')) start('tornado');
+if (params.has('debug')) {
   window.game = {
     state, objects,
     give(m) { state.absorbed += m; state.lift = liftFor(state.absorbed); },
