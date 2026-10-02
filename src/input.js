@@ -9,8 +9,17 @@ export function createInput(stickEl, knobEl) {
   addEventListener('blur', () => keys.clear());
 
   const canvasArea = document.body;
+  // Double-tap: two presses close together in time and space. Anyone can subscribe via read.onDoubleTap.
+  let lastTap = { t: -1e9, x: 0, y: 0 };
   canvasArea.addEventListener('pointerdown', (e) => {
     if (e.target.closest('button')) return;
+    const now = performance.now();
+    if (now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 60) {
+      lastTap.t = -1e9;
+      read.onDoubleTap?.();
+    } else {
+      lastTap = { t: now, x: e.clientX, y: e.clientY };
+    }
     stick.active = true; stick.id = e.pointerId;
     stick.ox = e.clientX; stick.oy = e.clientY; stick.x = 0; stick.y = 0;
     stickEl.style.left = e.clientX + 'px';
@@ -35,7 +44,7 @@ export function createInput(stickEl, knobEl) {
   canvasArea.addEventListener('pointercancel', end);
 
   // Returns screen-space direction: x right, y down. Magnitude 0..1.
-  return function read() {
+  function read() {
     let x = 0, y = 0;
     if (keys.has('a') || keys.has('arrowleft')) x -= 1;
     if (keys.has('d') || keys.has('arrowright')) x += 1;
@@ -45,4 +54,5 @@ export function createInput(stickEl, knobEl) {
     if (k > 0) return { x: x / k, y: y / k };
     return { x: stick.x, y: stick.y };
   };
+  return read;
 }

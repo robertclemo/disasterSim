@@ -100,6 +100,10 @@ export function buildAsteroid(scene) {
     reticle.rotation.y += dt * 0.6;
     const ready = cooldownLeft <= 0;
     ringMat.opacity = ready ? 0.7 + Math.sin(time * 8) * 0.25 : 0.35;
+    // Inner disc fills up as the next strike charges
+    const charge = 1 - Math.min(1, cooldownLeft / ASTEROID.cooldown);
+    fill.scale.setScalar(Math.max(0.02, charge * 0.9));
+    fill.material.opacity = ready ? 0.22 : 0.14;
 
     let shake = 0;
     for (let i = inFlight.length - 1; i >= 0; i--) {

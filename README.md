@@ -4,7 +4,7 @@ The game those mobile ads promise. Pick a UFO, a tornado, or an asteroid and wre
 
 - **UFO:** beam things up and they vanish into the saucer.
 - **Tornado:** things spiral up the funnel, get flung out on an arc, and land as scorched wreckage.
-- **Asteroid:** aim a reticle and hit STRIKE. Each impact leaves a crater and blasts everything in range outward. Wreckage gets kicked around again by later hits.
+- **Asteroid:** aim a reticle and double-tap to strike. Each impact leaves a crater and blasts everything in range outward. Wreckage gets kicked around again by later hits.
 
 In every mode, what you take makes you bigger, and bigger means you can lift heavier things: crops and sheep, then cows, cars, trucks, houses, shops, apartment towers, and finally the canyon walls. No paywalls, no timers, no upgrade shop.
 
@@ -19,7 +19,7 @@ npm run sim -- tornado
 npm run sim -- asteroid
 ```
 
-Controls: drag anywhere for a floating joystick, or WASD / arrow keys. In asteroid mode, tap STRIKE or press Space.
+Controls: drag anywhere for a floating joystick, or WASD / arrow keys. In asteroid mode, double-tap anywhere (or press Space) to strike, so the whole game plays one-thumbed.
 
 Add `?ufo`, `?tornado`, or `?asteroid` to the URL to skip the picker. Add `?debug` to get `game.give(mass)` and `game.goto(x, z)` in the browser console.
 

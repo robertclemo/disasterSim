@@ -69,15 +69,7 @@
     .modes .d { font-family: system-ui, sans-serif; font-size: 14px; font-weight: 600; }
     .modes button.storm { background: #c9b79c; }
     .modes button.rock { background: #ff8a5c; }
-    #strike { position: fixed; right: 20px; bottom: max(24px, calc(env(safe-area-inset-bottom) + 12px)); margin: 0;
-      width: 96px; height: 96px; padding: 0; border-radius: 50%; display: grid; place-items: center;
-      background: conic-gradient(rgba(29,29,43,.6) var(--cd, 0deg), #ff5a3c 0); font-size: 20px; color: #fff;
-      touch-action: none; transition: transform .08s; }
-    #strike span { text-shadow: -2px -2px 0 var(--ink), 2px -2px 0 var(--ink), -2px 2px 0 var(--ink), 2px 2px 0 var(--ink); }
-    #strike.ready { animation: ready 1s ease-in-out infinite; }
-    #strike:active { transform: scale(.92); }
-    @keyframes ready { 50% { box-shadow: 0 4px 0 var(--ink), 0 0 0 8px rgba(255,90,60,.35); } }
-    @media (prefers-reduced-motion: reduce) { #strike.ready { animation: none; } .pop { animation-duration: .01s; } }
+    @media (prefers-reduced-motion: reduce) { .pop { animation-duration: .01s; } }
     button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
     button { font-family: inherit; font-size: 22px; padding: 12px 28px; border-radius: 14px; border: 3px solid var(--ink);
       background: var(--cyan); color: var(--ink); cursor: pointer; margin-top: 12px; box-shadow: 0 4px 0 var(--ink); }
@@ -97,7 +89,6 @@
   <div id="banner" class="stroke"><div class="a" id="bannerLead">NOW LIFTING</div><div class="b" id="bannerText">COWS</div></div>
   <div id="heavy" class="stroke"><div class="a">TOO HEAVY</div><div class="b" id="heavyText">keep eating</div></div>
   <div id="hint" class="stroke" hidden>Drag anywhere to fly · WASD on keyboard</div>
-  <button id="strike" hidden aria-label="Strike"><span>STRIKE</span></button>
   <div id="stick"><div id="knob"></div></div>
   <div id="pick">
     <div class="t stroke">PICK YOUR DISASTER</div>

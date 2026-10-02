@@ -126,15 +126,13 @@ function asteroidMode() {
   const ast = buildAsteroid(scene);
   let cooldown = 0;
   let heavyFromBlast = 0, heavyTimer = 0;
-  const btn = $('strike');
-  btn.hidden = false;
   const fire = () => {
     if (cooldown > 0 || state.ended) return;
     cooldown = ASTEROID.cooldown;
     state.moved = true;
     ast.launch(state.x, state.z, state.scale, ASTEROID.blastRadius * state.scale);
   };
-  btn.addEventListener('pointerdown', (e) => { e.preventDefault(); fire(); });
+  readInput.onDoubleTap = fire;
   addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(); fire(); } });
   return {
     cfg: ASTEROID,
@@ -143,8 +141,6 @@ function asteroidMode() {
     popHeight: (s) => 6 * s,
     update(dt, time, s) {
       cooldown = Math.max(0, cooldown - dt);
-      btn.style.setProperty('--cd', `${(cooldown / ASTEROID.cooldown) * 360}deg`);
-      btn.classList.toggle('ready', cooldown <= 0);
       const shake = ast.update(dt, time, s, state.x, state.z, cooldown, (x, z, radius, rs) => {
         const need = blast({ objects, cx: x, cz: z, radius, lift: state.lift, scale: rs, rng,
           absorbedFor, absorbed: state.absorbed, onFling: absorb });
@@ -296,7 +292,7 @@ function start(which) {
   $('pick').classList.add('gone');
   $('hud').hidden = false;
   $('hint').hidden = false;
-  if (which === 'asteroid') $('hint').textContent = 'Drag to aim · tap STRIKE or press Space';
+  if (which === 'asteroid') $('hint').textContent = 'Drag to aim · double-tap to strike';
   clock.getDelta();
   requestAnimationFrame(tick);
 }
