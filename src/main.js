@@ -226,7 +226,7 @@ function dataMode() {
         onDrained: () => popAt('Drained!'),
         onTier: (t) => showBanner(tierLabel(t), TIERS[t].pr),
         onFreeze: () => {
-          showBanner('PERMIT FROZEN', 'City council is reviewing concerns', 3);
+          showBanner('PERMIT FROZEN', 'City council is reviewing concerns', 4.5);
           pickets.spawnNear(state.x, state.z);
           state.shake = 0.6;
         },
@@ -302,7 +302,7 @@ function updateHud() {
   $('nextFill').style.width = `${t * 100}%`;
 }
 
-function showBanner(label, lead = mode.words.banner, secs = 1.8) {
+function showBanner(label, lead = mode.words.banner, secs = 3.2) {
   $('bannerText').textContent = label.toUpperCase();
   $('bannerLead').textContent = lead;
   $('banner').classList.add('show');

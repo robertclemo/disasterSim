@@ -16,18 +16,29 @@ function mesh(geo, material, x = 0, y = 0, z = 0) {
   return m;
 }
 
+// Draws centred lines of text, shrinking any line that would overflow the sign.
+// Redraws once the game font finishes loading so it never sticks with the fallback face.
 function signTexture(lines, bg = '#ffffff', fg = '#14303a', w = 512, h = 160) {
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   const g = c.getContext('2d');
-  g.fillStyle = bg; g.fillRect(0, 0, w, h);
-  g.fillStyle = fg;
-  g.textAlign = 'center'; g.textBaseline = 'middle';
-  lines.forEach((l, i) => {
-    g.font = `${l.size}px "Lilita One", system-ui, sans-serif`;
-    g.fillText(l.text, w / 2, h * (lines.length === 1 ? 0.5 : (i + 0.75) / (lines.length + 0.5)));
-  });
-  return new THREE.CanvasTexture(c);
+  const tex = new THREE.CanvasTexture(c);
+  const draw = () => {
+    g.fillStyle = bg; g.fillRect(0, 0, w, h);
+    g.fillStyle = fg;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    lines.forEach((l, i) => {
+      let size = l.size;
+      const font = () => `${size}px "Lilita One", system-ui, sans-serif`;
+      g.font = font();
+      while (g.measureText(l.text).width > w * 0.88 && size > 8) { size -= 2; g.font = font(); }
+      g.fillText(l.text, w / 2, h * (lines.length === 1 ? 0.5 : (i + 0.75) / (lines.length + 0.5)));
+    });
+    tex.needsUpdate = true;
+  };
+  draw();
+  document.fonts?.load('40px "Lilita One"').then(draw, () => {});
+  return tex;
 }
 
 // ---------- truck ----------
@@ -110,12 +121,14 @@ export function buildCampus(scene, objects, sources) {
   ring.rotation.x = -Math.PI / 2; ring.position.y = 0.07;
   intake.add(ring);
   if (hasDOM) {
-    const board = new THREE.Mesh(new THREE.PlaneGeometry(9, 2.8), new THREE.MeshLambertMaterial({
-      map: signTexture([{ text: 'WELLSPRING COMPUTE', size: 64 }, { text: 'Powering Tomorrow, Today', size: 34 }], '#ffffff', '#14303a'),
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(15, 4.7), new THREE.MeshLambertMaterial({
+      map: signTexture([{ text: 'WELLSPRING COMPUTE', size: 120 }, { text: 'Powering Tomorrow, Today', size: 64 }], '#ffffff', '#14303a', 1024, 320),
     }));
-    board.position.set(0, 7, T.intakeRadius + 1);
-    const post = mesh(new THREE.CylinderGeometry(0.2, 0.2, 6, 6), lam(0x8d969c), 0, 3, T.intakeRadius + 0.9);
-    intake.add(board, post);
+    board.position.set(0, 9, T.intakeRadius + 1);
+    const frame = mesh(new THREE.BoxGeometry(15.6, 5.3, 0.3), lam(0x1fa99a), 0, 9, T.intakeRadius + 0.82);
+    const postL = mesh(new THREE.CylinderGeometry(0.25, 0.25, 7, 6), lam(0x8d969c), -5.5, 3.5, T.intakeRadius + 0.7);
+    const postR = mesh(new THREE.CylinderGeometry(0.25, 0.25, 7, 6), lam(0x8d969c), 5.5, 3.5, T.intakeRadius + 0.7);
+    intake.add(frame, board, postL, postR);
   }
   scene.add(intake);
 

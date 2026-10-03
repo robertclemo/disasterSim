@@ -88,7 +88,8 @@ export function stepTanker(t, sources, dt, ev = {}) {
   }
 
   // Outrage
-  if (t.freeze <= 0) t.outrage = Math.max(0, t.outrage - T.outrageDecay * dt);
+  // People only calm down once the stolen water is out of sight: no cooling while anything is in the tank
+  if (t.freeze <= 0 && t.tank < 0.01) t.outrage = Math.max(0, t.outrage - T.outrageDecay * dt);
   if (t.outrage >= 100 && t.freeze <= 0 && !t.pickets) {
     t.outrage = 100;
     t.freeze = T.freezeTime;

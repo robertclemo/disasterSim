@@ -62,6 +62,6 @@ The bot (which always flies to the nearest liftable thing) currently finishes in
 
 Tornado mode lands within a few seconds of these, finishing around 3:18. Asteroid mode finishes around 4:30, partly because the bot aims at single targets instead of clusters. Blast size and pace are `ASTEROID.blastRadius` and `ASTEROID.cooldown`. Fling distance is set by `TORNADO.flingSpeed` and `TORNADO.gravity`.
 
-Data center mode takes the bot about 7.5 minutes: backyard pools at 0:43, park ponds at 2:35, the reservoir at 6:14. Skipping PR gestures costs it about 80 seconds behind picket lines (`NO_PR=1 npm run sim -- datacenter`). Its knobs are `WATER`, `TIERS`, and `TANKER` in `src/config.js`.
+Data center mode takes the bot about 7.5 minutes: backyard pools at 0:43, park ponds at 2:35, the reservoir at 6:14. Outrage only cools while the tank is empty, so a bot that skips PR gestures takes about 9:15 and sits through one permit freeze (`NO_PR=1 npm run sim -- datacenter`). Its knobs are `WATER`, `TIERS`, and `TANKER` in `src/config.js`.
 
 The main levers are `LIFT_PER_MASS` (how much each bite grows your lift) and the masses in `KINDS`. Change them, run `npm run sim`, compare.
