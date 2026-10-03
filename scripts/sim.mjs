@@ -2,6 +2,8 @@
 // Run with: npm run sim            (UFO)
 //           npm run sim -- tornado
 //           npm run sim -- asteroid
+//           npm run sim -- datacenter
+if (process.argv[2] === 'datacenter') { await import('./sim-datacenter.mjs'); process.exit(0); }
 import * as THREE from 'three';
 import { KINDS, UFO, TORNADO, ASTEROID, liftFor, scaleFor } from '../src/config.js';
 import { buildWorld, updateMovers, mulberry32 } from '../src/world.js';

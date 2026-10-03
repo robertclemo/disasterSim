@@ -23,6 +23,8 @@ function flat(w, d, color, x, z, y = 0.01) {
 export function buildWorld(scene) {
   const rng = mulberry32(WORLD.seed);
   const objects = [];
+  // Layout notes for modes that add their own features (no extra rng calls, so other modes are unchanged)
+  const layout = { blocks: [], houses: [], fields: [] };
   const pitch = WORLD.blockSize + WORLD.roadWidth;
   const half = (WORLD.blocks * pitch) / 2;   // 90 by default
   const townEdge = half + WORLD.roadWidth / 2;
@@ -70,6 +72,7 @@ export function buildWorld(scene) {
       else type = roll < 0.12 ? 'shops' : roll < 0.75 ? 'houses' : 'park';
 
       const bs = WORLD.blockSize;
+      layout.blocks.push({ type, cx, cz, ring });
       if (type === 'tower' || type === 'shops') scene.add(flat(bs, bs, 0xd6d2c4, cx, cz, 0.025));
 
       if (type === 'tower') {
@@ -80,6 +83,7 @@ export function buildWorld(scene) {
       } else if (type === 'houses') {
         for (const [dx, dz, ry] of [[-5.5, -5.5, Math.PI], [5.5, -5.5, Math.PI], [-5.5, 5.5, 0], [5.5, 5.5, 0]]) {
           spawn('house', M.house(rng), cx + dx, cz + dz, ry);
+          layout.houses.push({ x: cx + dx, z: cz + dz, cx, cz, obj: objects[objects.length - 1] });
         }
         if (rng() < 0.6) spawn('tree', M.tree(rng), cx, cz);
       } else {
@@ -134,6 +138,7 @@ export function buildWorld(scene) {
 
   function field(type, x, z, w, d) {
     rects.push({ x, z, w, d });
+    layout.fields.push({ type, x, z, w, d });
     if (type === 'crops') {
       scene.add(flat(w, d, 0x9c6b3f, x, z, 0.02));
       for (let rx = -w / 2 + 1; rx <= w / 2 - 1; rx += 2.4) {
@@ -188,7 +193,7 @@ export function buildWorld(scene) {
     ang += (built.radius * 1.5) / R;
   }
 
-  return { objects, half, townEdge };
+  return { objects, half, townEdge, layout };
 }
 
 export function placeVehicle(o) {

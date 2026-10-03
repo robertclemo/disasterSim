@@ -64,11 +64,18 @@
     #pick.gone { opacity: 0; pointer-events: none; }
     #pick .t { font-size: clamp(34px, 10vw, 64px); color: var(--gold); text-align: center; line-height: 1; }
     .modes { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
-    .modes button { display: flex; flex-direction: column; gap: 2px; min-width: 180px; padding: 16px 22px; }
+    .modes button { display: flex; flex-direction: column; gap: 2px; min-width: 150px; padding: 14px 18px; }
+    .modes { max-width: 460px; }
     .modes .m { font-size: 30px; }
     .modes .d { font-family: system-ui, sans-serif; font-size: 14px; font-weight: 600; }
     .modes button.storm { background: #c9b79c; }
     .modes button.rock { background: #ff8a5c; }
+    .modes button.dc { background: #7fe0d2; }
+    #outrage { margin: 8px auto 0; width: min(340px, 82vw); }
+    #outrage .label { font-size: 13px; letter-spacing: 1px; text-align: center; margin-bottom: 3px; }
+    #outrage .bar { height: 10px; border-radius: 6px; background: rgba(29,29,43,.55); border: 2px solid var(--ink); overflow: hidden; }
+    #outrage .fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ffb347, #e5383b); transition: width .2s; }
+    #heavy.soft .a { color: var(--cyan); }
     @media (prefers-reduced-motion: reduce) { .pop { animation-duration: .01s; } }
     button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
     button { font-family: inherit; font-size: 22px; padding: 12px 28px; border-radius: 14px; border: 3px solid var(--ink);
@@ -78,16 +85,20 @@
 <body>
   <div id="hud" hidden>
     <div class="row">
-      <div class="stat stroke"><span class="k">MASS</span><span class="v" id="mass">0</span></div>
+      <div class="stat stroke"><span class="k" id="massLabel">MASS</span><span class="v" id="mass">0</span></div>
       <div class="stat right stroke"><span class="k" id="statLabel">LIFT</span><span class="v" id="lift">3</span></div>
     </div>
     <div id="next">
       <div class="label stroke" id="nextLabel">Next: Cows</div>
       <div class="bar"><div class="fill" id="nextFill"></div></div>
     </div>
+    <div id="outrage" hidden>
+      <div class="label stroke" id="outrageLabel">PUBLIC OUTRAGE</div>
+      <div class="bar"><div class="fill" id="outrageFill"></div></div>
+    </div>
   </div>
   <div id="banner" class="stroke"><div class="a" id="bannerLead">NOW LIFTING</div><div class="b" id="bannerText">COWS</div></div>
-  <div id="heavy" class="stroke"><div class="a">TOO HEAVY</div><div class="b" id="heavyText">keep eating</div></div>
+  <div id="heavy" class="stroke"><div class="a" id="heavyTitle">TOO HEAVY</div><div class="b" id="heavyText">keep eating</div></div>
   <div id="hint" class="stroke" hidden>Drag anywhere to fly · WASD on keyboard</div>
   <div id="stick"><div id="knob"></div></div>
   <div id="pick">
@@ -96,6 +107,7 @@
       <button data-mode="ufo"><span class="m">UFO</span><span class="d">Beam it all up</span></button>
       <button data-mode="tornado" class="storm"><span class="m">TORNADO</span><span class="d">Fling it all around</span></button>
       <button data-mode="asteroid" class="rock"><span class="m">ASTEROID</span><span class="d">Blast it all sky-high</span></button>
+      <button data-mode="datacenter" class="dc"><span class="m">DATA CENTER</span><span class="d">Drink the town dry</span></button>
     </div>
   </div>
   <div id="end" class="stroke">

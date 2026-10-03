@@ -1,9 +1,12 @@
 import * as THREE from 'three';
-import { KINDS, UFO, TORNADO, ASTEROID, liftFor, scaleFor } from './config.js';
+import { KINDS, UFO, TORNADO, ASTEROID, TANKER, TIERS, WATER, WORLD, liftFor, scaleFor } from './config.js';
 import { buildWorld, updateMovers, mulberry32 } from './world.js';
 import { buildUfo } from './ufo.js';
 import { buildTornado } from './tornado.js';
 import { buildAsteroid } from './asteroid.js';
+import { buildWater } from './water.js';
+import { buildTruck, buildCampus, buildPickets } from './datacenter.js';
+import { createTanker, stepTanker, prGesture, hallsFor } from './tanker-logic.js';
 import { createInput } from './input.js';
 import { stepObjects, stepTornadoObjects, blast, stepAsteroidObjects } from './game.js';
 
@@ -36,7 +39,8 @@ sun.shadow.bias = -0.0005;
 scene.add(hemi, sun, sun.target);
 
 // ---------- world ----------
-const { objects } = buildWorld(scene);
+const world = buildWorld(scene);
+const { objects } = world;
 const readInput = createInput($('stick'), $('knob'));
 const rng = mulberry32(42);
 
@@ -156,6 +160,126 @@ function asteroidMode() {
   };
 }
 
+// ---------- data center ----------
+const PR_GESTURES = ['Free tote bags', 'Community splash pad', 'Sustainability report', 'Branded water bottles',
+  'Thoughts and prayers', 'Little League sponsorship', 'Hydration awareness week'];
+
+function gal(units) {
+  const g = units * 1000;
+  if (g >= 1e6) return `${(g / 1e6).toFixed(g >= 1e7 ? 0 : 1)}M`;
+  if (g >= 1e3) return `${Math.round(g / 1e3)}K`;
+  return `${Math.round(g)}`;
+}
+
+function dataMode() {
+  scene.background.set(0xbfe3f0);
+  scene.fog.color.set(0xbfe3f0);
+  const sources = buildWater(scene, world);
+  const truck = buildTruck(scene);
+  const campus = buildCampus(scene, objects, sources);
+  const pitch = WORLD.blockSize + WORLD.roadWidth;
+  const roadLines = Array.from({ length: WORLD.blocks + 1 }, (_, i) => -world.half + i * pitch);
+  const pickets = buildPickets(scene, roadLines, world.townEdge);
+  const tk = createTanker();
+  state.x = tk.x; state.z = tk.z;
+  campus.addHall();
+  const totalWater = sources.reduce((a, s) => a + s.max, 0);
+  let popDelivered = 0, popTimer = 0, heading = Math.PI, done = false;
+
+  const tierLabel = (t) => Object.values(WATER).filter((w) => w.tier === t).map((w) => w.label).join(' & ');
+  const pr = () => {
+    if (state.ended) return;
+    if (prGesture(tk)) {
+      showBanner(PR_GESTURES[Math.floor(Math.random() * PR_GESTURES.length)], `PR GESTURE · OUTRAGE -${TANKER.prDrop}`);
+    } else if (tk.prTimer <= 0) {
+      popAt('Tank too low for PR');
+    }
+  };
+  readInput.onDoubleTap = pr;
+  addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(); pr(); } });
+  $('outrage').hidden = false;
+  $('massLabel').textContent = 'DELIVERED';
+
+  return {
+    cfg: TANKER,
+    words: { stat: 'TANK', banner: 'NOW PUMPING', end: 'DROUGHT DECLARED',
+      endText: () => `Wellspring Compute moved ${gal(tk.delivered)} gallons into the cloud. Shareholders are thrilled.` },
+    popHeight: (s) => 4 * s,
+    scaleTarget: () => 1 + 0.22 * tk.tier,
+    speedMult: () => TIERS[tk.tier].speed * (pickets.blocks(state.x, state.z) ? TANKER.picketSlow : 1),
+    update(dt, time, s) {
+      tk.x = state.x; tk.z = state.z;
+      if (Math.hypot(state.vx, state.vz) > 0.5) {
+        const want = Math.atan2(state.vx, state.vz);
+        let d = want - heading;
+        d = Math.atan2(Math.sin(d), Math.cos(d));
+        heading += d * (1 - Math.exp(-dt * 8));
+      }
+      truck.group.position.set(state.x, 0, state.z);
+      truck.group.rotation.y = heading;
+      truck.group.scale.setScalar(s);
+      truck.group.updateMatrixWorld();
+    },
+    step(dt, time, s) {
+      const before = tk.delivered;
+      stepTanker(tk, sources, dt, {
+        onDrained: () => popAt('Drained!'),
+        onTier: (t) => showBanner(tierLabel(t), TIERS[t].pr),
+        onFreeze: () => {
+          showBanner('PERMIT FROZEN', 'City council is reviewing concerns', 3);
+          pickets.spawnNear(state.x, state.z);
+          state.shake = 0.6;
+        },
+        onPicketsClear: () => { pickets.clear(); popAt('Protesters went home'); },
+      });
+      popDelivered += tk.delivered - before;
+      popTimer -= dt;
+      if (popDelivered > 0 && popTimer <= 0 && !tk.delivering) { popAt(`+${gal(popDelivered)} gal`); popDelivered = 0; }
+      if (popDelivered > 0 && popTimer <= 0 && tk.delivering && popDelivered > TIERS[tk.tier].cap * 0.3) {
+        popAt(`+${gal(popDelivered)} gal`); popDelivered = 0; popTimer = 0.3;
+      }
+      while (campus.count < hallsFor(tk.delivered)) {
+        const before = campus.count;
+        tk.outrage = Math.min(100, tk.outrage + campus.addHall());
+        if (campus.count === before) break;
+        popAt('+1 SERVER HALL');
+      }
+      if (tk.pumping) tk.pumping.setLevel(tk.pumping.volume / tk.pumping.max);
+      for (const src of sources) if (src.update && src.alive) src.update(dt, time);
+      campus.update(dt, time, tk.delivering);
+      pickets.update(time);
+      truck.setFill(tk.tank / TIERS[tk.tier].cap);
+      truck.setHose(tk.pumping, time, Math.max(1, s * 0.8));
+
+      const left = sources.some((src) => src.alive && src.volume > 0);
+      if (!left && tk.tank < 0.01 && !done) { done = true; setTimeout(endGame, 1200); }
+
+      if (tk.freeze > 0) return { title: 'PERMIT FROZEN', text: `pumping resumes in ${Math.ceil(tk.freeze)}s` };
+      if (tk.blocked) {
+        const need = TIERS[tk.blocked.tier].at - tk.delivered;
+        return { title: 'PUMP TOO SMALL', text: `deliver ${gal(need)} more gallons` };
+      }
+      if (tk.tank >= TIERS[tk.tier].cap - 1e-6 && !tk.delivering) return { title: 'TANK FULL', text: 'head back to the campus', soft: true };
+      return 0;
+    },
+    hud() {
+      const tier = TIERS[tk.tier], next = TIERS[tk.tier + 1];
+      $('mass').textContent = gal(tk.delivered);
+      $('lift').textContent = `${gal(tk.tank)}/${gal(tier.cap)}`;
+      if (next) {
+        $('nextLabel').textContent = `Next: ${tierLabel(tk.tier + 1)}`;
+        $('nextFill').style.width = `${Math.min(100, ((tk.delivered - tier.at) / (next.at - tier.at)) * 100)}%`;
+      } else {
+        const remaining = sources.reduce((a, src) => a + (src.alive ? src.volume : 0), 0);
+        $('nextLabel').textContent = `Town water left: ${Math.ceil((remaining / totalWater) * 100)}%`;
+        $('nextFill').style.width = `${(remaining / totalWater) * 100}%`;
+      }
+      $('outrageLabel').textContent = tk.freeze > 0 ? 'PERMIT FROZEN' : tk.pickets ? 'PUBLIC OUTRAGE · PICKETS OUT' : 'PUBLIC OUTRAGE';
+      $('outrageFill').style.width = `${tk.outrage}%`;
+    },
+  };
+}
+
 let mode = null;
 
 // ---------- HUD helpers ----------
@@ -178,18 +302,20 @@ function updateHud() {
   $('nextFill').style.width = `${t * 100}%`;
 }
 
-function showBanner(label) {
+function showBanner(label, lead = mode.words.banner, secs = 1.8) {
   $('bannerText').textContent = label.toUpperCase();
+  $('bannerLead').textContent = lead;
   $('banner').classList.add('show');
-  state.bannerTimer = 1.8;
+  state.bannerTimer = secs;
 }
 
 const tmpV = new THREE.Vector3();
 function popAt(amount) {
+  const text = typeof amount === 'string' ? amount : `+${fmt(amount)}`;
   tmpV.set(state.x, mode.popHeight(state.scale), state.z).project(camera);
   const el = document.createElement('div');
   el.className = 'pop stroke';
-  el.textContent = `+${fmt(amount)}`;
+  el.textContent = text;
   el.style.left = `${(tmpV.x * 0.5 + 0.5) * innerWidth + (Math.random() - 0.5) * 40}px`;
   el.style.top = `${(-tmpV.y * 0.5 + 0.5) * innerHeight - 30}px`;
   document.body.appendChild(el);
@@ -247,13 +373,14 @@ function tick() {
   const dt = Math.min(clock.getDelta(), 1 / 20);
   time += dt;
 
-  state.scale += (scaleFor(state.lift) - state.scale) * (1 - Math.exp(-dt * 2.5));
+  const targetScale = mode.scaleTarget ? mode.scaleTarget() : scaleFor(state.lift);
+  state.scale += (targetScale - state.scale) * (1 - Math.exp(-dt * 2.5));
   const s = state.scale;
 
   // Movement: screen up is world -z
   const inp = readInput();
   if (inp.x || inp.y) state.moved = true;
-  const speed = mode.cfg.speed * Math.pow(s, mode.cfg.speedGrowth);
+  const speed = mode.cfg.speed * Math.pow(s, mode.cfg.speedGrowth) * (mode.speedMult ? mode.speedMult() : 1);
   const k = 1 - Math.exp(-dt * 6);
   state.vx += (inp.x * speed - state.vx) * k;
   state.vz += (inp.y * speed - state.vz) * k;
@@ -269,15 +396,19 @@ function tick() {
   state.popTimer -= dt;
   if (state.pendingPop > 0 && state.popTimer <= 0) { popAt(state.pendingPop); state.pendingPop = 0; state.popTimer = 0.18; }
   if (state.bannerTimer > 0 && (state.bannerTimer -= dt) <= 0) $('banner').classList.remove('show');
-  if (heaviestNeed > 0) {
+  if (heaviestNeed) {
     state.heavyTimer = 0.4;
-    $('heavyText').textContent = `${mode.words.heavy} ${fmt(heaviestNeed)} more mass`;
+    const msg = typeof heaviestNeed === 'object' ? heaviestNeed
+      : { title: 'TOO HEAVY', text: `${mode.words.heavy} ${fmt(heaviestNeed)} more mass` };
+    $('heavyTitle').textContent = msg.title;
+    $('heavyText').textContent = msg.text;
+    $('heavy').classList.toggle('soft', !!msg.soft);
     $('heavy').classList.add('show');
   } else if (state.heavyTimer > 0 && (state.heavyTimer -= dt) <= 0) {
     $('heavy').classList.remove('show');
   }
   if (state.moved) $('hint').style.opacity = '0';
-  updateHud();
+  if (mode.hud) mode.hud(); else updateHud();
 
   placeCamera(dt, s);
   renderer.render(scene, camera);
@@ -286,13 +417,14 @@ function tick() {
 
 // ---------- start screen ----------
 function start(which) {
-  mode = which === 'tornado' ? tornadoMode() : which === 'asteroid' ? asteroidMode() : ufoMode();
+  mode = { tornado: tornadoMode, asteroid: asteroidMode, datacenter: dataMode }[which]?.() ?? ufoMode();
   $('statLabel').textContent = mode.words.stat;
   $('bannerLead').textContent = mode.words.banner;
   $('pick').classList.add('gone');
   $('hud').hidden = false;
   $('hint').hidden = false;
   if (which === 'asteroid') $('hint').textContent = 'Drag to aim · double-tap to strike';
+  if (which === 'datacenter') $('hint').textContent = 'Drag to drive · park by water to pump · double-tap for PR';
   clock.getDelta();
   requestAnimationFrame(tick);
 }
@@ -306,6 +438,7 @@ const params = new URLSearchParams(location.search);
 if (params.has('ufo')) start('ufo');
 if (params.has('tornado')) start('tornado');
 if (params.has('asteroid')) start('asteroid');
+if (params.has('datacenter')) start('datacenter');
 if (params.has('debug')) {
   window.game = {
     state, objects,
